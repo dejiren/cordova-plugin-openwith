@@ -27,19 +27,30 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>NSExtensionActivationRule</key>
-			<!-- string>TRUEPREDICATE</string -->
-      <dict>
-        <key>NSExtensionActivationSupportsImageWithMaxCount</key>
-        <integer>1</integer>
-        <!-- key>NSExtensionActivationSupportsMovieWithMaxCount</key>
-        <integer>1</integer -->
-        <!-- key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-        <integer>1</integer -->
-      </dict>
-      <key>NSExtensionActivationUsesStrictMatching</key>
-      <integer>1</integer>
-      <key>NSExtensionActivationDictionaryVersion</key>
-      <integer>2</integer>
+			<string>SUBQUERY (
+    extensionItems,
+    $extensionItem,
+    SUBQUERY (
+        $extensionItem.attachments,
+        $attachment,
+        (
+            ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.text&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;com.adobe.pdf&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.image&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.presentation&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.composite-content&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.audio&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.movie&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.url&quot;
+            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.data&quot;
+        )
+
+    ).@count == $extensionItem.attachments.@count
+).@count == 1</string>
+			<key>NSExtensionActivationUsesStrictMatching</key>
+			<integer>1</integer>
+			<key>NSExtensionActivationDictionaryVersion</key>
+			<integer>2</integer>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>

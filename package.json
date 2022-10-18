@@ -71,6 +71,7 @@
     "src/ios/ShareExtension/ShareExtension-Info.plist",
     "src/ios/ShareExtension/ShareViewController.h",
     "src/ios/ShareExtension/ShareViewController.m",
+    "www/openwith.d.ts",
     "www/openwith.js",
     "www/test-openwith.js",
     "hooks/iosAddTarget.js",

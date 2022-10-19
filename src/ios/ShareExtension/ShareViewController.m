@@ -68,8 +68,13 @@
 
 -(void) viewDidLoad {
     [super viewDidLoad];
+    self.view.backgroundColor = UIColor.systemBackgroundColor;
     printf("did load");
     [self debug:@"[viewDidLoad]"];
+}
+- (void) viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self debug:@"[viewWillAppear]"];
     [self submit];
 }
 
@@ -130,26 +135,15 @@
     [self debug:@"[submit]"];
 
     // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-    for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
-        
-        if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
-            [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
+    @try {
+        for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
             
-            [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
-                
-                NSData *data = [[NSData alloc] init];
-                if([(NSObject*)item isKindOfClass:[NSURL class]]) {
-                    data = [NSData dataWithContentsOfURL:(NSURL*)item];
+            void(^textCommpletionHandler)(NSString* item, NSError *error) = ^(NSString* item, NSError *error){
+                [self debug:[NSString stringWithFormat:@"textCommpletionHandler text length = %lu", (unsigned long)item.length]];
+                if (error) {
+                    [self error:error.description];
+                    return;
                 }
-                if([(NSObject*)item isKindOfClass:[UIImage class]]) {
-                    data = UIImagePNGRepresentation((UIImage*)item);
-                }
-
-                NSString *suggestedName = @"";
-                if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
-                    suggestedName = [itemProvider valueForKey:@"suggestedName"];
-                }
-
                 NSString *uti = @"";
                 NSArray<NSString *> *utis = [NSArray new];
                 if ([itemProvider.registeredTypeIdentifiers count] > 0) {
@@ -161,40 +155,109 @@
                 }
                 NSDictionary *dict = @{
                     @"backURL": self.backURL,
-                    @"data" : data,
+                    @"data" : [item dataUsingEncoding:NSUTF8StringEncoding],
+                    @"text" : item,
                     @"uti": uti,
                     @"utis": utis,
-                    @"name": suggestedName
+                    @"name": @"",
                 };
                 [self.userDefaults setObject:dict forKey:@"image"];
                 [self.userDefaults synchronize];
-
+                
                 // Emit a URL that opens the cordova app
                 NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-
-                // Not allowed:
-                // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
-                
-                // Crashes:
-                // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
-                
-                // From https://stackoverflow.com/a/25750229/2343390
-                // Reported not to work since iOS 8.3
-                // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
-                // [self.webView loadRequest:request];
                 
                 [self openURL:[NSURL URLWithString:url]];
-
+                
                 // Inform the host that we're done, so it un-blocks its UI.
                 [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
-            }];
-
-            return;
+            };
+            
+            if ([itemProvider hasItemConformingToTypeIdentifier:@"public.url"]) {
+                [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
+                [itemProvider loadItemForTypeIdentifier:@"public.url" options:nil completionHandler: ^(NSURL* item, NSError *error) {
+                    textCommpletionHandler(item.absoluteString, error);
+                }];
+            }
+            else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
+                [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
+                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: textCommpletionHandler];
+            }
+            else if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
+                [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
+                
+                [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
+                    
+                    NSData *data = [[NSData alloc] init];
+                    if([(NSObject*)item isKindOfClass:[NSURL class]]) {
+                        data = [NSData dataWithContentsOfURL:(NSURL*)item];
+                    }
+                    if([(NSObject*)item isKindOfClass:[UIImage class]]) {
+                        data = UIImagePNGRepresentation((UIImage*)item);
+                    }
+                    if([(NSObject*)item isKindOfClass:[NSData class]]) {
+                        data = [NSData dataWithData:(NSData*)item];
+                    }
+                    
+                    NSString *suggestedName = @"";
+                    if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
+                        suggestedName = [itemProvider valueForKey:@"suggestedName"];
+                    }
+                    else if ([(NSObject*)item isKindOfClass:[NSURL class]]) {
+                        suggestedName = ((NSURL*)item).lastPathComponent;
+                    }
+                    
+                    NSString *uti = @"";
+                    NSArray<NSString *> *utis = [NSArray new];
+                    if ([itemProvider.registeredTypeIdentifiers count] > 0) {
+                        uti = itemProvider.registeredTypeIdentifiers[0];
+                        utis = itemProvider.registeredTypeIdentifiers;
+                    }
+                    else {
+                        uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
+                    }
+                    NSDictionary *dict = @{
+                        @"backURL": self.backURL,
+                        @"data" : data,
+                        @"uti": uti,
+                        @"utis": utis,
+                        @"name": suggestedName
+                    };
+                    [self.userDefaults setObject:dict forKey:@"image"];
+                    [self.userDefaults synchronize];
+                    
+                    // Emit a URL that opens the cordova app
+                    NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
+                    
+                    // Not allowed:
+                    // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
+                    
+                    // Crashes:
+                    // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
+                    
+                    // From https://stackoverflow.com/a/25750229/2343390
+                    // Reported not to work since iOS 8.3
+                    // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
+                    // [self.webView loadRequest:request];
+                    
+                    [self openURL:[NSURL URLWithString:url]];
+                    
+                    // Inform the host that we're done, so it un-blocks its UI.
+                    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+                }];
+                
+                return;
+            }
+            else {
+                // Inform the host that we're done, so it un-blocks its UI.
+                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+            }
         }
     }
-
-    // Inform the host that we're done, so it un-blocks its UI.
-    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+    @catch(NSException* exception) {
+        // Inform the host that we're done, so it un-blocks its UI.
+        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+    }
 }
 
 - (NSArray*) configurationItems {

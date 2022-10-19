@@ -6,6 +6,7 @@ interface IntentItemDataDescriptor {
   path?: string;
   base64?: string;
   text?: string;
+  uti?: string;
   utis?: string[];
 }
 

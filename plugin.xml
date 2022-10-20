@@ -86,7 +86,7 @@ SOFTWARE.
     <!-- android -->
     <platform name="android">
 
-        <preference name="ANDROID_MIME_TYPE" />
+        <preference name="ANDROID_MIME_TYPE" default="*/*" />
         <preference name="ANDROID_EXTRA_ACTIONS" default=" " />
 
         <js-module src="www/openwith.js" name="openwith">

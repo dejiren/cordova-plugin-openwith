@@ -15,6 +15,9 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import static android.content.Intent.EXTRA_SUBJECT;
+import static android.content.Intent.EXTRA_TEXT;
+
 /**
  * Handle serialization of Android objects ready to be sent to javascript.
  */
@@ -31,8 +34,13 @@ class Serializer {
             final Intent intent)
             throws JSONException {
         JSONArray items = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            items = itemsFromClipData(contentResolver, intent.getClipData());
+        if (items == null || items.length() == 0) {
+            items = itemsFromExtrasText(contentResolver, intent);
+        }
+        if (items == null || items.length() == 0) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                items = itemsFromClipData(contentResolver, intent.getClipData());
+            }
         }
         if (items == null || items.length() == 0) {
             items = itemsFromExtras(contentResolver, intent.getExtras());
@@ -86,6 +94,29 @@ class Serializer {
             return new JSONArray(items);
         }
         return null;
+    }
+
+    /** Extract the list of items from the intent's extra stream.
+     *
+     * See Intent.EXTRA_TEXT for details. */
+    public static JSONArray itemsFromExtrasText(
+            final ContentResolver contentResolver,
+            final Intent intent)
+            throws JSONException {
+        if (intent == null || intent.getType() == null || !intent.getType().equals("text/plain")) {
+            return null;
+        }
+        Bundle extras = intent.getExtras();
+        JSONObject item = new JSONObject();
+        String text = extras.getString(EXTRA_TEXT, "");
+        String subject = extras.getString(EXTRA_SUBJECT, "");
+        item.put("text", text + "  " + subject);
+        item.put("type", "text/plain");
+        item.put("uri", "");
+
+        final JSONObject[] items = new JSONObject[1];
+        items[0] = item;
+        return new JSONArray(items);
     }
 
     /** Extract the list of items from the intent's extra stream.
@@ -147,8 +178,11 @@ class Serializer {
         }
         final JSONObject json = new JSONObject();
         final String type = contentResolver.getType(uri);
+        final String path = getRealPathFromURI(contentResolver, uri);
+        final String name = path != null ? Uri.parse(path).getLastPathSegment() : uri.getLastPathSegment();
         json.put("type", type);
         json.put("uri", uri);
+        json.put("name", name);
         json.put("path", getRealPathFromURI(contentResolver, uri));
         return json;
     }

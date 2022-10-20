@@ -257,6 +257,7 @@ static NSDictionary* launchOptions = nil;
             @"type": type,
             @"utis": utis,
             @"uri": uri,
+            @"text": dict[@"text"],
             @"name": name
         }]
     }];

@@ -173,7 +173,8 @@
                 [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
             };
             
-            if ([itemProvider hasItemConformingToTypeIdentifier:@"public.url"]) {
+            if ([itemProvider hasItemConformingToTypeIdentifier:@"public.url"] &&
+                itemProvider.registeredTypeIdentifiers.count == 1) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.url" options:nil completionHandler: ^(NSURL* item, NSError *error) {
                     textCommpletionHandler(item.absoluteString, error);

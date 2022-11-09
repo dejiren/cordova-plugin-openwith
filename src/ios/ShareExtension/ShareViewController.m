@@ -39,6 +39,8 @@
 @property (nonatomic) int verbosityLevel;
 @property (nonatomic,retain) NSUserDefaults *userDefaults;
 @property (nonatomic,retain) NSString *backURL;
+@property (nonatomic,retain) NSFileManager *fileManager;
+@property (nonatomic,retain) NSURL *appGroupCacheDirectory;
 @end
 
 /*
@@ -81,6 +83,13 @@
 - (void) setup {
     self.userDefaults = [[NSUserDefaults alloc] initWithSuiteName:SHAREEXT_GROUP_IDENTIFIER];
     self.verbosityLevel = [self.userDefaults integerForKey:@"verbosityLevel"];
+    self.fileManager = [NSFileManager defaultManager];
+    NSURL* cacheUrl = [_fileManager containerURLForSecurityApplicationGroupIdentifier:SHAREEXT_GROUP_IDENTIFIER];
+    self.appGroupCacheDirectory = [cacheUrl URLByAppendingPathComponent:@"Library/Caches/ShareExt" isDirectory:true];
+    
+    [self removeAppGroupCacheFile];
+    [self createAppGroupCacheDirectory];
+    
     [self debug:@"[setup]"];
 }
 
@@ -134,24 +143,38 @@
     [self setup];
     [self debug:@"[submit]"];
 
-    // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-    @try {
-        for (NSItemProvider* itemProvider in ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments) {
+    __block long attachmentCount = ((NSExtensionItem*)self.extensionContext.inputItems[0]).attachments.count;
+    __block NSMutableArray* shareItems = [NSMutableArray array];
+    
+    void(^openCordovaAppIfNeed)(void) = ^{
+        attachmentCount--;
+        if (attachmentCount <= 0) {
+            [self.userDefaults setObject:shareItems forKey:@"image"];
+            // Emit a URL that opens the cordova app
+            NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
+            [self openURL:[NSURL URLWithString:url]];
             
+            // Inform the host that we're done, so it un-blocks its UI.
+            [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+        }
+    };
+    
+    // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
+    NSExtensionItem *inputItem = self.extensionContext.inputItems[0];
+    [inputItem.attachments enumerateObjectsUsingBlock:^(NSItemProvider *itemProvider, NSUInteger idx, BOOL *stop) {
+        @try {
             void(^textCommpletionHandler)(NSString* item, NSError *error) = ^(NSString* item, NSError *error){
                 [self debug:[NSString stringWithFormat:@"textCommpletionHandler text length = %lu", (unsigned long)item.length]];
                 if (error) {
                     [self error:error.description];
+                    openCordovaAppIfNeed();
                     return;
                 }
-                NSString *uti = @"";
-                NSArray<NSString *> *utis = [NSArray new];
+                NSString *uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
+                NSArray<NSString *> *utis = @[];
                 if ([itemProvider.registeredTypeIdentifiers count] > 0) {
                     uti = itemProvider.registeredTypeIdentifiers[0];
                     utis = itemProvider.registeredTypeIdentifiers;
-                }
-                else {
-                    uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
                 }
                 NSDictionary *dict = @{
                     @"backURL": self.backURL,
@@ -161,16 +184,8 @@
                     @"utis": utis,
                     @"name": @"",
                 };
-                [self.userDefaults setObject:dict forKey:@"image"];
-                [self.userDefaults synchronize];
-                
-                // Emit a URL that opens the cordova app
-                NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-                
-                [self openURL:[NSURL URLWithString:url]];
-                
-                // Inform the host that we're done, so it un-blocks its UI.
-                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+                [shareItems addObject:dict];
+                openCordovaAppIfNeed();
             };
             
             if ([itemProvider hasItemConformingToTypeIdentifier:@"public.url"] &&
@@ -184,81 +199,50 @@
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: textCommpletionHandler];
             }
-            else if ([itemProvider hasItemConformingToTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER]) {
+            else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.data"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-                
-                [itemProvider loadItemForTypeIdentifier:SHAREEXT_UNIFORM_TYPE_IDENTIFIER options:nil completionHandler: ^(id<NSSecureCoding> item, NSError *error) {
-                    
-                    NSData *data = [[NSData alloc] init];
-                    if([(NSObject*)item isKindOfClass:[NSURL class]]) {
-                        data = [NSData dataWithContentsOfURL:(NSURL*)item];
-                    }
-                    if([(NSObject*)item isKindOfClass:[UIImage class]]) {
-                        data = UIImagePNGRepresentation((UIImage*)item);
-                    }
-                    if([(NSObject*)item isKindOfClass:[NSData class]]) {
-                        data = [NSData dataWithData:(NSData*)item];
-                    }
-                    
-                    NSString *suggestedName = @"";
+                [itemProvider loadFileRepresentationForTypeIdentifier:@"public.data"
+                                                    completionHandler:^(NSURL* srcUrl, NSError *loadError) {
+                    NSString *suggestedName = srcUrl.lastPathComponent;
                     if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
                         suggestedName = [itemProvider valueForKey:@"suggestedName"];
                     }
-                    else if ([(NSObject*)item isKindOfClass:[NSURL class]]) {
-                        suggestedName = ((NSURL*)item).lastPathComponent;
-                    }
                     
-                    NSString *uti = @"";
-                    NSArray<NSString *> *utis = [NSArray new];
+                    NSString *uti = @"public.data";
+                    NSArray<NSString *> *utis = @[];
                     if ([itemProvider.registeredTypeIdentifiers count] > 0) {
                         uti = itemProvider.registeredTypeIdentifiers[0];
                         utis = itemProvider.registeredTypeIdentifiers;
                     }
-                    else {
-                        uti = SHAREEXT_UNIFORM_TYPE_IDENTIFIER;
+                    
+                    NSURL* saveToUrl = [self.appGroupCacheDirectory URLByAppendingPathComponent:[NSString stringWithFormat:@"ShareExt-%ld", idx]];
+                    NSError* copyError = nil;
+                    [[NSFileManager defaultManager] copyItemAtURL:srcUrl toURL:saveToUrl error:&copyError];
+                    if (copyError) {
+                        NSLog(@"copy Error: %@", copyError.description);
+                        openCordovaAppIfNeed();
+                        return;
                     }
                     NSDictionary *dict = @{
                         @"backURL": self.backURL,
-                        @"data" : data,
+                        @"path": saveToUrl.path,
                         @"uti": uti,
                         @"utis": utis,
                         @"name": suggestedName
                     };
-                    [self.userDefaults setObject:dict forKey:@"image"];
-                    [self.userDefaults synchronize];
-                    
-                    // Emit a URL that opens the cordova app
-                    NSString *url = [NSString stringWithFormat:@"%@://image", SHAREEXT_URL_SCHEME];
-                    
-                    // Not allowed:
-                    // [[UIApplication sharedApplication] openURL:[NSURL URLWithString:url]];
-                    
-                    // Crashes:
-                    // [self.extensionContext openURL:[NSURL URLWithString:url] completionHandler:nil];
-                    
-                    // From https://stackoverflow.com/a/25750229/2343390
-                    // Reported not to work since iOS 8.3
-                    // NSURLRequest *request = [[NSURLRequest alloc] initWithURL:[NSURL URLWithString:url]];
-                    // [self.webView loadRequest:request];
-                    
-                    [self openURL:[NSURL URLWithString:url]];
-                    
-                    // Inform the host that we're done, so it un-blocks its UI.
-                    [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+                    [shareItems addObject:dict];
+                    openCordovaAppIfNeed();
                 }];
-                
-                return;
             }
             else {
                 // Inform the host that we're done, so it un-blocks its UI.
-                [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
+                openCordovaAppIfNeed();
             }
         }
-    }
-    @catch(NSException* exception) {
-        // Inform the host that we're done, so it un-blocks its UI.
-        [self.extensionContext completeRequestReturningItems:@[] completionHandler:nil];
-    }
+        @catch(NSException* exception) {
+            openCordovaAppIfNeed();
+        }
+    }];
 }
 
 - (NSArray*) configurationItems {
@@ -320,4 +304,21 @@
     self.backURL = [self backURLFromBundleID:hostBundleID];
 }
 
+- (void) removeAppGroupCacheFile {
+    NSError* error = nil;
+    if ([_fileManager fileExistsAtPath:_appGroupCacheDirectory.path]) {
+        [_fileManager removeItemAtURL:_appGroupCacheDirectory error:&error];
+        if (error) {
+            NSLog(@"failed to remove cache directory: %@", error.description);
+        }
+    }
+}
+
+- (void) createAppGroupCacheDirectory {
+    NSError* error = nil;
+    [_fileManager createDirectoryAtURL:_appGroupCacheDirectory withIntermediateDirectories:true attributes:nil error:&error];
+    if (error) {
+        NSLog(@"failed to create cache directory: %@", error.description);
+    }
+}
 @end

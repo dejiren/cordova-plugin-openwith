@@ -78,6 +78,8 @@ static NSDictionary* launchOptions = nil;
 @property (nonatomic) int verbosityLevel;
 @property (nonatomic,retain) NSUserDefaults *userDefaults;
 @property (nonatomic,retain) NSString *backURL;
+@property (nonatomic,retain) NSFileManager *fileManager;
+@property (nonatomic,retain) NSURL* appGroupCacheDirectory;
 @end
 
 /*
@@ -160,6 +162,9 @@ static NSDictionary* launchOptions = nil;
     self.verbosityLevel = VERBOSITY_INFO;
     self.loggerCallback = nil;
     self.handlerCallback = nil;
+    self.fileManager = [NSFileManager defaultManager];
+    NSURL* cacheUrl = [_fileManager containerURLForSecurityApplicationGroupIdentifier:SHAREEXT_GROUP_IDENTIFIER];
+    self.appGroupCacheDirectory = [cacheUrl URLByAppendingPathComponent:@"Library/Caches/ShareExt" isDirectory:true];
 }
 
 - (void) onResume {
@@ -204,6 +209,60 @@ static NSDictionary* launchOptions = nil;
     return ret == nil ? uti : ret;
 }
 
+- (NSArray<NSDictionary*>*)convertToShareItemArray: (NSArray*)objects {
+    NSMutableArray* shareItemArray = [NSMutableArray array];
+    [objects enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+        NSDictionary* item = [obj isKindOfClass:NSDictionary.class] ? [self convertToShareItem:obj] : nil;
+        if (item) {
+            [shareItemArray addObject:item];
+        }
+    }];
+    return shareItemArray;
+}
+- (NSDictionary*)convertToShareItem: (NSDictionary*)dict {
+    NSError* error = nil;
+    NSData *data = dict[@"data"];
+    NSString *name = dict[@"name"];
+    NSString *path = dict[@"path"];
+    self.backURL = dict[@"backURL"];
+    NSString *text = dict[@"text"];
+    NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
+    if (path.length > 0) {
+        data = [NSData dataWithContentsOfFile:path options:0 error:&error];
+        if (error) {
+            NSLog(@"data load error: file=%@ error=%@", path, error.description);
+        }
+    }
+
+    // Send to javascript
+    NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@", name, type];
+    
+    if (text) {
+        [self debug:[NSString stringWithFormat: @"[checkForFileToShare] Sharing a %lu words text", (unsigned long)text.length]];
+        return @{
+            @"type": type,
+            @"utis": dict[@"utis"] ?: @[],
+            @"uri": uri,
+            @"name": name,
+            @"base64": @"",
+            @"text": text
+        };
+    }
+    else if (data) {
+        [self debug:[NSString stringWithFormat: @"[checkForFileToShare] Sharing a %lu bytes file", (unsigned long)data.length]];
+        return @{
+            @"type": type,
+            @"utis": dict[@"utis"] ?: @[],
+            @"uri": uri,
+            @"name": name,
+            @"base64": [data convertToBase64],
+        };
+    }
+    
+    [self debug:@"[checkForFileToShare] Data content is invalid"];
+    return nil;
+}
+
 - (void) checkForFileToShare {
     [self debug:@"[checkForFileToShare]"];
     if (self.handlerCallback == nil) {
@@ -220,46 +279,24 @@ static NSDictionary* launchOptions = nil;
 
     // Clean-up the object, assume it's been handled from now, prevent double processing
     [self.userDefaults removeObjectForKey:@"image"];
-
-    // Extract sharing data, make sure that it is valid
-    if (![object isKindOfClass:[NSDictionary class]]) {
+    
+    // Read data from shared file paths
+    NSArray<NSDictionary*>* shareItems = nil;
+    if ([object isKindOfClass:NSDictionary.class]) {
+        shareItems = [self convertToShareItemArray:@[object]];
+    } else if([object isKindOfClass:NSArray.class]) {
+        shareItems = [self convertToShareItemArray:(NSArray*)object];
+    } else {
         [self debug:@"[checkForFileToShare] Data object is invalid"];
         return;
     }
-    NSDictionary *dict = (NSDictionary*)object;
-    NSData *data = dict[@"data"];
-    NSString *name = dict[@"name"];
-    self.backURL = dict[@"backURL"];
-    NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
-    if (![data isKindOfClass:NSData.class]) {
-        [self debug:@"[checkForFileToShare] Data content is invalid"];
-        return;
-    }
-    NSArray *utis = dict[@"utis"];
-    if (utis == nil) {
-        utis = @[];
-    }
-
-    // TODO: add the backURL to the shared intent, put it aside in the plugin
-    // TODO: implement cordova.openwith.exit(intent), will check if backURL is set
-
-    // Send to javascript
-    [self debug:[NSString stringWithFormat:
-                 @"[checkForFileToShare] Sharing a %lu bytes image", (unsigned long)data.length]];
-
-    NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@",
-        name, type];
+    // remove share files
+    [self removeAppGroupCacheFile];
+    
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
         @"action": @"SEND",
         @"exit": @YES,
-        @"items": @[@{
-            @"base64": [data convertToBase64],
-            @"type": type,
-            @"utis": utis,
-            @"uri": uri,
-            @"text": dict[@"text"] ?: @"",
-            @"name": name
-        }]
+        @"items": shareItems
     }];
     pluginResult.keepCallback = [NSNumber numberWithBool:YES];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:self.handlerCallback];
@@ -294,6 +331,16 @@ static NSDictionary* launchOptions = nil;
     }
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+}
+
+- (void) removeAppGroupCacheFile {
+    NSError* error = nil;
+    if ([_fileManager fileExistsAtPath:_appGroupCacheDirectory.path]) {
+        [_fileManager removeItemAtURL:_appGroupCacheDirectory error:&error];
+        if (error) {
+            NSLog(@"failed to remove cache directory: %@", error.description);
+        }
+    }
 }
 
 @end

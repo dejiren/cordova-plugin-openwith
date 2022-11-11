@@ -220,23 +220,13 @@ static NSDictionary* launchOptions = nil;
     return shareItemArray;
 }
 - (NSDictionary*)convertToShareItem: (NSDictionary*)dict {
-    NSError* error = nil;
-    NSData *data = dict[@"data"];
     NSString *name = dict[@"name"];
-    NSString *path = dict[@"path"];
+    NSString *uri = dict[@"uri"] ?: @"";
     self.backURL = dict[@"backURL"];
     NSString *text = dict[@"text"];
     NSString *type = [self mimeTypeFromUti:dict[@"uti"]];
-    if (path.length > 0) {
-        data = [NSData dataWithContentsOfFile:path options:0 error:&error];
-        if (error) {
-            NSLog(@"data load error: file=%@ error=%@", path, error.description);
-        }
-    }
 
     // Send to javascript
-    NSString *uri = [NSString stringWithFormat: @"shareextension://index=0,name=%@,type=%@", name, type];
-    
     if (text) {
         [self debug:[NSString stringWithFormat: @"[checkForFileToShare] Sharing a %lu words text", (unsigned long)text.length]];
         return @{
@@ -248,19 +238,13 @@ static NSDictionary* launchOptions = nil;
             @"text": text
         };
     }
-    else if (data) {
-        [self debug:[NSString stringWithFormat: @"[checkForFileToShare] Sharing a %lu bytes file", (unsigned long)data.length]];
-        return @{
-            @"type": type,
-            @"utis": dict[@"utis"] ?: @[],
-            @"uri": uri,
-            @"name": name,
-            @"base64": [data convertToBase64],
-        };
-    }
-    
-    [self debug:@"[checkForFileToShare] Data content is invalid"];
-    return nil;
+    return @{
+        @"type": type,
+        @"utis": dict[@"utis"] ?: @[],
+        @"uri": uri,
+        @"name": name,
+        @"base64": @"",
+    };
 }
 
 - (void) checkForFileToShare {
@@ -291,7 +275,7 @@ static NSDictionary* launchOptions = nil;
         return;
     }
     // remove share files
-    [self removeAppGroupCacheFile];
+    // [self removeAppGroupCacheFile];
     
     CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:@{
         @"action": @"SEND",
@@ -313,9 +297,31 @@ static NSDictionary* launchOptions = nil;
 // Load data from URL
 - (void) load:(CDVInvokedUrlCommand*)command {
     [self debug:@"[load]"];
-    // Base64 data already loaded, so this shouldn't happen
-    // the function is defined just to prevent crashes from unexpected client behaviours.
-    CDVPluginResult* pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Load, it shouldn't have been!"];
+    NSDictionary* shareItem = [command argumentAtIndex:0 withDefault:nil andClass:[NSDictionary class]];
+    CDVPluginResult* pluginResult;
+    
+    // Base64 data already loaded
+    if ([shareItem[@"base64"] length] > 0) {
+        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"Load, it shouldn't have been!"];
+        [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        return;
+    }
+    
+    NSData *data;
+    NSString *uri = shareItem[@"uri"];
+    if (uri.length > 0) {
+        NSError *error = nil;
+        data = [NSData dataWithContentsOfURL:[NSURL URLWithString:uri] options:0 error:&error];
+        if (error) {
+            NSString* message = [NSString stringWithFormat: @"data load error: file=%@ error=%@", uri, error.description];
+            NSLog(@"%@", message);
+            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:message];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+            return;
+        }
+    }
+    
+    pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[data convertToBase64] ?: @""];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 }
 

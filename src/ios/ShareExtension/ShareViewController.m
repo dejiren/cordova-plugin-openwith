@@ -225,7 +225,7 @@
                     }
                     NSDictionary *dict = @{
                         @"backURL": self.backURL,
-                        @"path": saveToUrl.path,
+                        @"uri": saveToUrl.absoluteString,
                         @"uti": uti,
                         @"utis": utis,
                         @"name": suggestedName

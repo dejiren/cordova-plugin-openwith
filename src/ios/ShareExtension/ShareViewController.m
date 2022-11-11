@@ -215,7 +215,8 @@
                         utis = itemProvider.registeredTypeIdentifiers;
                     }
                     
-                    NSURL* saveToUrl = [self.appGroupCacheDirectory URLByAppendingPathComponent:[NSString stringWithFormat:@"ShareExt-%ld", idx]];
+                    NSURL* saveDir = [self getGroupCacheURLForIndex:idx createDirectory:true];
+                    NSURL* saveToUrl = [saveDir URLByAppendingPathComponent:suggestedName];
                     NSError* copyError = nil;
                     [[NSFileManager defaultManager] copyItemAtURL:srcUrl toURL:saveToUrl error:&copyError];
                     if (copyError) {
@@ -320,5 +321,18 @@
     if (error) {
         NSLog(@"failed to create cache directory: %@", error.description);
     }
+}
+
+- (NSURL*) getGroupCacheURLForIndex:(NSUInteger)idx createDirectory:(BOOL)isCreate {
+    NSURL* url = [_appGroupCacheDirectory URLByAppendingPathComponent:[@(idx) stringValue] isDirectory:true];
+    
+    if (isCreate) {
+        NSError* error = nil;
+        [_fileManager createDirectoryAtURL:url withIntermediateDirectories:true attributes:nil error:&error];
+        if (error) {
+            NSLog(@"failed to create cache directory: path=%@ reson=%@", url, error.description);
+        }
+    }
+    return url;
 }
 @end

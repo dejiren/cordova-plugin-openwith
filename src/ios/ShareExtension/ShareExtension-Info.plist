@@ -27,26 +27,20 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>NSExtensionActivationRule</key>
-			<string>SUBQUERY (
-    extensionItems,
-    $extensionItem,
-    SUBQUERY (
-        $extensionItem.attachments,
-        $attachment,
-        (
-            ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.text&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;com.adobe.pdf&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.image&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.presentation&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.composite-content&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.audio&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.movie&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.url&quot;
-            || ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO &quot;public.data&quot;
-        )
-
-    ).@count == $extensionItem.attachments.@count
-).@count == 1</string>
+			<dict>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>5</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>5</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>5</integer>
+				<key>NSExtensionActivationSupportsText</key>
+				<true/>
+				<key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
+				<integer>1</integer>
+			</dict>
 			<key>NSExtensionActivationUsesStrictMatching</key>
 			<integer>1</integer>
 			<key>NSExtensionActivationDictionaryVersion</key>

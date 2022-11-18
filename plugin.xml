@@ -70,7 +70,18 @@ SOFTWARE.
                 </dict>
             </array>
         </config-file>
-
+        
+        <!-- <config-file parent="com.apple.security.application-groups" target="*/Entitlements-Debug.plist">
+            <array>
+                <string>$IOS_GROUP_IDENTIFIER</string>
+            </array>
+        </config-file>
+        <config-file parent="com.apple.security.application-groups" target="*/Entitlements-Release.plist">
+            <array>
+                <string>$IOS_GROUP_IDENTIFIER</string>
+            </array>
+        </config-file> -->
+        
         <hook type="before_plugin_install" src="hooks/npmInstall.js" />
         <hook type="after_plugin_install" src="hooks/iosCopyShareExtension.js" />
         <hook type="before_prepare" src="hooks/iosCopyShareExtension.js" />

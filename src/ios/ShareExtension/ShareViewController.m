@@ -199,14 +199,41 @@
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: textCommpletionHandler];
             }
+            else if ([itemProvider.registeredTypeIdentifiers containsObject:@"public.image"]) {
+                // Convert to PNG file when receiving images without data type, such as screenshots
+                [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
+                [itemProvider loadItemForTypeIdentifier: @"public.image" options:nil completionHandler:^(UIImage* data, NSError *error) {
+                    NSData *imageData = UIImagePNGRepresentation(data);
+                    NSString* suggestedName = itemProvider.suggestedName ?: @"";
+                    
+                    NSString *uti = @"public.png";
+                    NSArray<NSString *> *utis = @[uti];
+                    
+                    NSURL* saveDir = [self getGroupCacheURLForIndex:idx createDirectory:true];
+                    NSURL* saveToUrl = [saveDir URLByAppendingPathComponent:suggestedName];
+                    NSError* copyError = nil;
+                    [imageData writeToURL:saveToUrl atomically:true];
+                    if (copyError) {
+                        NSLog(@"copy Error: %@", copyError.description);
+                        openCordovaAppIfNeed();
+                        return;
+                    }
+                    NSDictionary *dict = @{
+                        @"backURL": self.backURL,
+                        @"uri": saveToUrl.absoluteString,
+                        @"uti": uti,
+                        @"utis": utis,
+                        @"name": suggestedName
+                    };
+                    [shareItems addObject:dict];
+                    openCordovaAppIfNeed();
+                }];
+            }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.data"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadFileRepresentationForTypeIdentifier:@"public.data"
                                                     completionHandler:^(NSURL* srcUrl, NSError *loadError) {
-                    NSString *suggestedName = srcUrl.lastPathComponent;
-                    if ([itemProvider respondsToSelector:NSSelectorFromString(@"getSuggestedName")]) {
-                        suggestedName = [itemProvider valueForKey:@"suggestedName"];
-                    }
+                    NSString *suggestedName = itemProvider.suggestedName ?: srcUrl.lastPathComponent;
                     
                     NSString *uti = @"public.data";
                     NSArray<NSString *> *utis = @[];

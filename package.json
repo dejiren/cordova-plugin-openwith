@@ -69,6 +69,7 @@
     "src/ios/ShareExtension/MainInterface.storyboard",
     "src/ios/ShareExtension/ShareExtension-Entitlements.plist",
     "src/ios/ShareExtension/ShareExtension-Info.plist",
+    "src/ios/ShareExtension/ShareExtension-PrivacyInfo.xcprivacy",
     "src/ios/ShareExtension/ShareViewController.h",
     "src/ios/ShareExtension/ShareViewController.m",
     "www/openwith.d.ts",

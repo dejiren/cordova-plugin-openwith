@@ -163,7 +163,7 @@
     NSExtensionItem *inputItem = self.extensionContext.inputItems[0];
     [inputItem.attachments enumerateObjectsUsingBlock:^(NSItemProvider *itemProvider, NSUInteger idx, BOOL *stop) {
         @try {
-            void(^textCommpletionHandler)(NSString* item, NSError *error) = ^(NSString* item, NSError *error){
+            void(^urlCommpletionHandler)(NSString* item, NSError *error) = ^(NSString* item, NSError *error){
                 [self debug:[NSString stringWithFormat:@"textCommpletionHandler text length = %lu", (unsigned long)item.length]];
                 if (error) {
                     [self error:error.description];
@@ -192,12 +192,40 @@
                 itemProvider.registeredTypeIdentifiers.count == 1) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.url" options:nil completionHandler: ^(NSURL* item, NSError *error) {
-                    textCommpletionHandler(item.absoluteString, error);
+                    urlCommpletionHandler(item.absoluteString, error);
                 }];
             }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: textCommpletionHandler];
+                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: ^(NSURL* srcUrl, NSError *loadError) {
+                    NSString *suggestedName = itemProvider.suggestedName ?: srcUrl.lastPathComponent;
+                    
+                    NSString *uti = @"public.txt";
+                    NSArray<NSString *> *utis = @[];
+                    if ([itemProvider.registeredTypeIdentifiers count] > 0) {
+                        uti = itemProvider.registeredTypeIdentifiers[0];
+                        utis = itemProvider.registeredTypeIdentifiers;
+                    }
+                    
+                    NSURL* saveDir = [self getGroupCacheURLForIndex:idx createDirectory:true];
+                    NSURL* saveToUrl = [saveDir URLByAppendingPathComponent:suggestedName];
+                    NSError* copyError = nil;
+                    [[NSFileManager defaultManager] copyItemAtURL:srcUrl toURL:saveToUrl error:&copyError];
+                    if (copyError) {
+                        NSLog(@"copy Error: %@", copyError.description);
+                        openCordovaAppIfNeed();
+                        return;
+                    }
+                    NSDictionary *dict = @{
+                        @"backURL": self.backURL,
+                        @"uri": saveToUrl.absoluteString,
+                        @"uti": uti,
+                        @"utis": utis,
+                        @"name": suggestedName
+                    };
+                    [shareItems addObject:dict];
+                    openCordovaAppIfNeed();
+                }];
             }
             else if ([itemProvider.registeredTypeIdentifiers containsObject:@"public.image"]) {
                 // Convert to PNG file when receiving images without data type, such as screenshots

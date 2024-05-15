@@ -187,7 +187,37 @@
                 [shareItems addObject:dict];
                 openCordovaAppIfNeed();
             };
-            
+
+            void(^fileCommpletionHandler)(NSURL* srcUrl, NSError *loadError) = ^(NSURL* srcUrl, NSError *loadError){
+                NSString *suggestedName = itemProvider.suggestedName ?: srcUrl.lastPathComponent;
+
+                NSString *uti = [itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"] ? @"public.txt" : @"public.data";
+                NSArray<NSString *> *utis = @[];
+                if ([itemProvider.registeredTypeIdentifiers count] > 0) {
+                    uti = itemProvider.registeredTypeIdentifiers[0];
+                    utis = itemProvider.registeredTypeIdentifiers;
+                }
+                
+                NSURL* saveDir = [self getGroupCacheURLForIndex:idx createDirectory:true];
+                NSURL* saveToUrl = [saveDir URLByAppendingPathComponent:suggestedName];
+                NSError* copyError = nil;
+                [[NSFileManager defaultManager] copyItemAtURL:srcUrl toURL:saveToUrl error:&copyError];
+                if (copyError) {
+                    NSLog(@"copy Error: %@", copyError.description);
+                    openCordovaAppIfNeed();
+                    return;
+                }
+                NSDictionary *dict = @{
+                    @"backURL": self.backURL,
+                    @"uri": saveToUrl.absoluteString,
+                    @"uti": uti,
+                    @"utis": utis,
+                    @"name": suggestedName
+                };
+                [shareItems addObject:dict];
+                openCordovaAppIfNeed();
+            };
+
             if ([itemProvider hasItemConformingToTypeIdentifier:@"public.url"] &&
                 itemProvider.registeredTypeIdentifiers.count == 1) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
@@ -197,35 +227,7 @@
             }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: ^(NSURL* srcUrl, NSError *loadError) {
-                    NSString *suggestedName = itemProvider.suggestedName ?: srcUrl.lastPathComponent;
-                    
-                    NSString *uti = @"public.txt";
-                    NSArray<NSString *> *utis = @[];
-                    if ([itemProvider.registeredTypeIdentifiers count] > 0) {
-                        uti = itemProvider.registeredTypeIdentifiers[0];
-                        utis = itemProvider.registeredTypeIdentifiers;
-                    }
-                    
-                    NSURL* saveDir = [self getGroupCacheURLForIndex:idx createDirectory:true];
-                    NSURL* saveToUrl = [saveDir URLByAppendingPathComponent:suggestedName];
-                    NSError* copyError = nil;
-                    [[NSFileManager defaultManager] copyItemAtURL:srcUrl toURL:saveToUrl error:&copyError];
-                    if (copyError) {
-                        NSLog(@"copy Error: %@", copyError.description);
-                        openCordovaAppIfNeed();
-                        return;
-                    }
-                    NSDictionary *dict = @{
-                        @"backURL": self.backURL,
-                        @"uri": saveToUrl.absoluteString,
-                        @"uti": uti,
-                        @"utis": utis,
-                        @"name": suggestedName
-                    };
-                    [shareItems addObject:dict];
-                    openCordovaAppIfNeed();
-                }];
+                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: fileCommpletionHandler];
             }
             else if ([itemProvider.registeredTypeIdentifiers containsObject:@"public.image"]) {
                 // Convert to PNG file when receiving images without data type, such as screenshots
@@ -259,36 +261,7 @@
             }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.data"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-                [itemProvider loadFileRepresentationForTypeIdentifier:@"public.data"
-                                                    completionHandler:^(NSURL* srcUrl, NSError *loadError) {
-                    NSString *suggestedName = itemProvider.suggestedName ?: srcUrl.lastPathComponent;
-                    
-                    NSString *uti = @"public.data";
-                    NSArray<NSString *> *utis = @[];
-                    if ([itemProvider.registeredTypeIdentifiers count] > 0) {
-                        uti = itemProvider.registeredTypeIdentifiers[0];
-                        utis = itemProvider.registeredTypeIdentifiers;
-                    }
-                    
-                    NSURL* saveDir = [self getGroupCacheURLForIndex:idx createDirectory:true];
-                    NSURL* saveToUrl = [saveDir URLByAppendingPathComponent:suggestedName];
-                    NSError* copyError = nil;
-                    [[NSFileManager defaultManager] copyItemAtURL:srcUrl toURL:saveToUrl error:&copyError];
-                    if (copyError) {
-                        NSLog(@"copy Error: %@", copyError.description);
-                        openCordovaAppIfNeed();
-                        return;
-                    }
-                    NSDictionary *dict = @{
-                        @"backURL": self.backURL,
-                        @"uri": saveToUrl.absoluteString,
-                        @"uti": uti,
-                        @"utis": utis,
-                        @"name": suggestedName
-                    };
-                    [shareItems addObject:dict];
-                    openCordovaAppIfNeed();
-                }];
+                [itemProvider loadFileRepresentationForTypeIdentifier:@"public.data" completionHandler:fileCommpletionHandler];
             }
             else {
                 // Inform the host that we're done, so it un-blocks its UI.

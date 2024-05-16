@@ -228,11 +228,11 @@
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: ^(NSURL* item, NSError *error) {
-                    if (item.absoluteString.contains('file://')) {
+                    // if (item.absoluteString.contains('file://')) {
                         fileCommpletionHandler(item, error);
-                    } else {
-                        textCommpletionHandler(item, error);
-                    }
+                    // } else {
+                    //     textCommpletionHandler(item, error);
+                    // }
                 }];
             }
             else if ([itemProvider.registeredTypeIdentifiers containsObject:@"public.image"]) {

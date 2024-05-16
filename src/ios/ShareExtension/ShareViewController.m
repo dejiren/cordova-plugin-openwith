@@ -227,7 +227,13 @@
             }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: fileCommpletionHandler];
+                [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: ^(NSURL* item, NSError *error) {
+                    if (itemProvider.suggestedName) {
+                        fileCommpletionHandler(item, error);
+                    } else {
+                        textCommpletionHandler(item.absoluteString, error);
+                    }
+                }];
             }
             else if ([itemProvider.registeredTypeIdentifiers containsObject:@"public.image"]) {
                 // Convert to PNG file when receiving images without data type, such as screenshots

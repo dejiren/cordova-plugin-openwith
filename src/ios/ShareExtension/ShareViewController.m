@@ -229,9 +229,9 @@
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: ^(NSURL* item, NSError *error) {
                     // if (item.absoluteString.contains('file://')) {
-                        fileCommpletionHandler(item, error);
+                        // fileCommpletionHandler(item, error);
                     // } else {
-                    //     textCommpletionHandler(item, error);
+                        textCommpletionHandler(item, error);
                     // }
                 }];
             }

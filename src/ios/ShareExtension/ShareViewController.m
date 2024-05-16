@@ -163,7 +163,7 @@
     NSExtensionItem *inputItem = self.extensionContext.inputItems[0];
     [inputItem.attachments enumerateObjectsUsingBlock:^(NSItemProvider *itemProvider, NSUInteger idx, BOOL *stop) {
         @try {
-            void(^urlCommpletionHandler)(NSString* item, NSError *error) = ^(NSString* item, NSError *error){
+            void(^textCommpletionHandler)(NSString* item, NSError *error) = ^(NSString* item, NSError *error){
                 [self debug:[NSString stringWithFormat:@"textCommpletionHandler text length = %lu", (unsigned long)item.length]];
                 if (error) {
                     [self error:error.description];
@@ -222,7 +222,7 @@
                 itemProvider.registeredTypeIdentifiers.count == 1) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.url" options:nil completionHandler: ^(NSURL* item, NSError *error) {
-                    urlCommpletionHandler(item.absoluteString, error);
+                    textCommpletionHandler(item.absoluteString, error);
                 }];
             }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {

@@ -227,7 +227,9 @@
             }
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
-                // File if it has multiple identifiers
+                // identifiersが複数ある場合にはファイルとして扱う
+                // NOTE: 通常テキストの場合はpublic.plain-textのみ
+                //       ファイルの場合はpublic.plain-textとpublic.file-urlを持っている
                 if ([itemProvider.registeredTypeIdentifiers count] > 1) {
                     [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: fileCommpletionHandler];
                 } else {

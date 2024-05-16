@@ -231,7 +231,7 @@
                     // if (item.absoluteString.contains('file://')) {
                         // fileCommpletionHandler(item, error);
                     // } else {
-                        textCommpletionHandler(item, error);
+                        textCommpletionHandler(item.absoluteString, error);
                     // }
                 }];
             }

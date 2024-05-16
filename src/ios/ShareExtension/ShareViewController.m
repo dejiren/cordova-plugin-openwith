@@ -228,10 +228,10 @@
             else if ([itemProvider hasItemConformingToTypeIdentifier:@"public.plain-text"]) {
                 [self debug:[NSString stringWithFormat:@"item provider = %@", itemProvider]];
                 [itemProvider loadItemForTypeIdentifier:@"public.plain-text" options:nil completionHandler: ^(NSURL* item, NSError *error) {
-                    if (itemProvider.suggestedName) {
+                    if (item.absoluteString.contains('file://')) {
                         fileCommpletionHandler(item, error);
                     } else {
-                        textCommpletionHandler(item.absoluteString, error);
+                        textCommpletionHandler(item, error);
                     }
                 }];
             }

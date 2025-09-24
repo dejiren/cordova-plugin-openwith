@@ -336,8 +336,27 @@
 // This is called at the point where the Post dialog is about to be shown.
 // We use it to store the _hostBundleID
 - (void) willMoveToParentViewController: (UIViewController*)parent {
-    NSString *hostBundleID = [parent valueForKey:(@"_hostBundleID")];
-    self.backURL = [self backURLFromBundleID:hostBundleID];
+    // iOS 26対応：_hostBundleIDへのアクセスを安全に
+    @try {
+        NSString *hostBundleID = nil;
+        
+        if (@available(iOS 26.0, *)) {
+            // iOS 26: 別の方法でbundle IDを取得
+            if (self.extensionContext) {
+                // Extension contextから取得を試みる
+                hostBundleID = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleIdentifier"];
+            }
+        } else {
+            // iOS 25以前：既存の方法
+            hostBundleID = [parent valueForKey:(@"_hostBundleID")];
+        }
+        
+        self.backURL = [self backURLFromBundleID:hostBundleID];
+    }
+    @catch (NSException *exception) {
+        [self error:[NSString stringWithFormat:@"Failed to get host bundle ID: %@", exception.reason]];
+        self.backURL = @"";
+    }
 }
 
 - (void) removeAppGroupCacheFile {

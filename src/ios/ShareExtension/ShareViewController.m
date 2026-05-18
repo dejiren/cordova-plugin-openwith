@@ -52,6 +52,23 @@
 #define VERBOSITY_WARN  20
 #define VERBOSITY_ERROR 30
 
+static BOOL ShouldUseAlternateHostBundleIDMethod(void) {
+    if (@available(iOS 26.0, *)) {
+        return YES;
+    }
+    NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
+    // iOS 18.7.9以降の18系でも_hostBundleIDへのアクセスが利用できない
+    if (version.majorVersion == 18) {
+        if (version.minorVersion > 7) {
+            return YES;
+        }
+        if (version.minorVersion == 7 && version.patchVersion >= 9) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 @implementation ShareViewController
 
 @synthesize verbosityLevel = _verbosityLevel;
@@ -336,18 +353,18 @@
 // This is called at the point where the Post dialog is about to be shown.
 // We use it to store the _hostBundleID
 - (void) willMoveToParentViewController: (UIViewController*)parent {
-    // iOS 26対応：_hostBundleIDへのアクセスを安全に
+    // iOS 26 / iOS 18.7.9 対応：_hostBundleIDへのアクセスを安全に
     @try {
         NSString *hostBundleID = nil;
         
-        if (@available(iOS 26.0, *)) {
-            // iOS 26: 別の方法でbundle IDを取得
+        if (ShouldUseAlternateHostBundleIDMethod()) {
+            // iOS 26 以降、または iOS 18.7.9 以降の場合
             if (self.extensionContext) {
                 // Extension contextから取得を試みる
                 hostBundleID = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleIdentifier"];
             }
         } else {
-            // iOS 25以前：既存の方法
+            // 上記以外：既存の方法
             hostBundleID = [parent valueForKey:(@"_hostBundleID")];
         }
         
